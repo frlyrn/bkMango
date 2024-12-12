@@ -1,4 +1,5 @@
-const { postRegistHandler, postLoginHandler, postPredictHandler } = require('../server/handler');
+const { postRegistHandler, postLoginHandler, postPredictHandler, getHistoryHandler } = require('../server/handler');
+const { authenticate } = require ('../services/middleware')
 
 const routes = [
     {
@@ -24,6 +25,15 @@ const routes = [
             }
         }
     },
+    {
+        method: 'GET',
+        path: '/history',
+        handler: getHistoryHandler,
+        options: {
+            pre: [{ method: authenticate }], 
+        }
+    }
+    
 ]
 
 module.exports = routes;

@@ -1,5 +1,8 @@
 const crypto = require('crypto');
-const { createUser, getUserByEmail } = require('../services/storeData');
+const jwt = require('jsonwebtoken');
+
+const predictClassification = require('../services/inferenceService');
+const { createUser, getUserByEmail, storeData, getHistoryByUserId } = require('../services/storeData');
 const { generateToken } = require('../services/jwt')
 
 async function postRegistHandler(request, h) {
@@ -12,8 +15,8 @@ async function postRegistHandler(request, h) {
         }).code(400);
     }
 
-    const salt = crypto.randomBytes(16).toString('hex'); 
-    const hashedPassword = crypto.scryptSync(password, salt, 64).toString('hex');  
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = crypto.scryptSync(password, salt, 64).toString('hex');
 
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -22,7 +25,7 @@ async function postRegistHandler(request, h) {
         name,
         email,
         password: hashedPassword,
-        salt: salt,  
+        salt: salt,
         createdAt
     };
 
@@ -33,10 +36,10 @@ async function postRegistHandler(request, h) {
         message: 'User successfully registered',
         data
     });
-    
+
     response.code(201);
     return response;
-} 
+}
 
 async function postLoginHandler(request, h) {
     const { email, password } = request.payload;
@@ -67,12 +70,16 @@ async function postLoginHandler(request, h) {
         }).code(401);
     }
 
-    const token = generateToken({ userId: user.id, email: user.email });
+    const token = jwt.sign(
+        { userId: user.id, email }, // Gunakan user.id sebagai userId
+        process.env.JWT_SECRET, // Secret dari .env
+        { expiresIn: '1h' }
+    );
 
     const response = h.response({
         status: 'success',
         message: 'Login berhasil.',
-        data: { email }
+        data: { token }
     });
 
     response.code(200);
@@ -80,10 +87,23 @@ async function postLoginHandler(request, h) {
 }
 
 async function postPredictHandler(request, h) {
-    const { image } = request.payload; 
-    const { model } = request.server.app; 
+    const { image } = request.payload;
+    const { model } = request.server.app;
 
-    const userId = request.auth.credentials.userId;  
+    if (!image) {
+        return h.response({
+            status: 'fail',
+            message: 'Image is required.',
+        }).code(400);
+    }
+
+    const userId = request.auth.credentials?.userId;
+    if (!userId) {
+        return h.response({
+            status: 'fail',
+            message: 'Unauthorized. User ID is missing.',
+        }).code(401);
+    }
 
     const { label, suggestion } = await predictClassification(model, image);
     const id = crypto.randomUUID();
@@ -97,7 +117,7 @@ async function postPredictHandler(request, h) {
     };
 
     await storeData(userId, data);
-    
+
     const response = h.response({
         status: 'success',
         message: 'Model is predicted successfully',
@@ -108,5 +128,23 @@ async function postPredictHandler(request, h) {
     return response;
 }
 
+const getHistoryHandler = async (request, h) => {
+    const userId = request.auth.credentials.userId;  
+  
+    const history = await getHistoryByUserId(userId);
+  
+    if (!history || history.length === 0) {
+      return h.response({
+        status: 'fail',
+        message: 'No history found for this user.',
+      }).code(404);
+    }
+  
+    return h.response({
+      status: 'success',
+      message: 'History retrieved successfully.',
+      data: history,
+    }).code(200);
+  };  
 
-module.exports = { postRegistHandler, postLoginHandler, postPredictHandler };
+module.exports = { postRegistHandler, postLoginHandler, postPredictHandler, getHistoryHandler };
