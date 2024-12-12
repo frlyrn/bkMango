@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
 const routes = require('../server/routes');
+const loadModel = require('../services/loadModel');
 const inputError = require('../exceptions/inputError');
 
 (async () => {
@@ -21,6 +22,9 @@ const inputError = require('../exceptions/inputError');
         },
     });
 
+    const model = await loadModel();
+    server.app.model = model;
+
     server.route(routes);
 
     server.ext('onPreResponse', function (request, h) {
@@ -29,7 +33,7 @@ const inputError = require('../exceptions/inputError');
         if (response instanceof inputError) {
             const newResponse = h.response({
                 status: 'fail',
-                message: `${response.message} Silakan gunakan foto lain.`
+                message: `${response.message} Please use another photo.`
             });
             newResponse.code(response.statusCode);
             return newResponse;

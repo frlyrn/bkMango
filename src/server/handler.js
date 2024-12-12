@@ -11,8 +11,8 @@ async function postRegistHandler(request, h) {
         }).code(400);
     }
 
-    const salt = crypto.randomBytes(16).toString('hex');  // Membuat salt random
-    const hashedPassword = crypto.scryptSync(password, salt, 64).toString('hex');  // Menggunakan scryptSync untuk hashing password
+    const salt = crypto.randomBytes(16).toString('hex'); 
+    const hashedPassword = crypto.scryptSync(password, salt, 64).toString('hex');  
 
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -76,4 +76,34 @@ async function postLoginHandler(request, h) {
     return response;
 }
 
-module.exports = { postRegistHandler, postLoginHandler };
+async function postPredictHandler(request, h) {
+    const { image } = request.payload; 
+    const { model } = request.server.app; 
+
+    const userId = request.auth.credentials.userId;  
+
+    const { label, suggestion } = await predictClassification(model, image);
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+
+    const data = {
+        id,
+        result: label,
+        suggestion,
+        createdAt
+    };
+
+    await storeData(userId, data);
+    
+    const response = h.response({
+        status: 'success',
+        message: 'Model is predicted successfully',
+        data
+    });
+
+    response.code(201);
+    return response;
+}
+
+
+module.exports = { postRegistHandler, postLoginHandler, postPredictHandler };

@@ -30,5 +30,16 @@ async function getUserByEmail(email) {
     return user;
 }
 
+async function storeData(userId, data) {
+  const db = new Firestore();
+  const predictionsCollection = db.collection('predictions');
+  
+  await predictionsCollection.doc(userId).collection('history').add({
+    timestamp: new Date(),
+    ...data
+  });
 
-module.exports = { createUser, getUserByEmail };
+  console.log(`Prediction stored for user ${userId}`);
+}
+
+module.exports = { createUser, getUserByEmail, storeData };
