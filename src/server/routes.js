@@ -16,13 +16,14 @@ const routes = [
         method: 'POST',
         handler: postPredictHandler,
         options: {
-          payload: {
-            allow: 'multipart/form-data',
-            multipart: true,
-            maxBytes: 1000000, 
-          }
+            pre: [{ method: authenticate }],
+            payload: {
+                allow: 'multipart/form-data',
+                multipart: true,
+                maxBytes: 1000000,
+            }
         }
-      },
+    },
 ]
 
 module.exports = routes;

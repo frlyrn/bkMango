@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { createUser, getUserByEmail } = require('../services/storeData');
+const { generateToken } = require('../services/jwt')
 
 async function postRegistHandler(request, h) {
     const { name, email, password } = request.payload;
@@ -65,6 +66,8 @@ async function postLoginHandler(request, h) {
             message: 'Email atau password salah.',
         }).code(401);
     }
+
+    const token = generateToken({ userId: user.id, email: user.email });
 
     const response = h.response({
         status: 'success',
