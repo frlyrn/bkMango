@@ -71,8 +71,8 @@ async function postLoginHandler(request, h) {
     }
 
     const token = jwt.sign(
-        { userId: user.id, email }, // Gunakan user.id sebagai userId
-        process.env.JWT_SECRET, // Secret dari .env
+        { userId: user.id, email }, 
+        process.env.JWT_SECRET, 
         { expiresIn: '1h' }
     );
 
@@ -86,47 +86,67 @@ async function postLoginHandler(request, h) {
     return response;
 }
 
-async function postPredictHandler(request, h) {
+async function predictWithFlask(image) {
+    const url = 'https://flask-mango-predictor-900275146000.asia-southeast2.run.app/predict';
+    
+    const response = await axios.post(url, {
+      image: image,  
+    });
+  
+    if (response.status === 200) {
+      return response.data;  
+    } else {
+      throw new Error('Error predicting image');
+    }
+  }
+  
+  async function postPredictHandler(request, h) {
     const { image } = request.payload;
     const { model } = request.server.app;
-
+  
     if (!image) {
-        return h.response({
-            status: 'fail',
-            message: 'Image is required.',
-        }).code(400);
+      return h.response({
+        status: 'fail',
+        message: 'Image is required.',
+      }).code(400);
     }
-
+  
     const userId = request.auth.credentials?.userId;
     if (!userId) {
-        return h.response({
-            status: 'fail',
-            message: 'Unauthorized. User ID is missing.',
-        }).code(401);
+      return h.response({
+        status: 'fail',
+        message: 'Unauthorized. User ID is missing.',
+      }).code(401);
     }
-
-    const { label, suggestion } = await predictClassification(model, image);
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-
-    const data = {
+  
+    try {
+      const { label, suggestion } = await predictWithFlask(image);
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+  
+      const data = {
         id,
         result: label,
         suggestion,
         createdAt
-    };
-
-    await storeData(userId, data);
-
-    const response = h.response({
+      };
+      await storeData(userId, data);
+  
+      const response = h.response({
         status: 'success',
         message: 'Model is predicted successfully',
         data
-    });
-
-    response.code(201);
-    return response;
-}
+      });
+  
+      response.code(201);
+      return response;
+    } catch (error) {
+      return h.response({
+        status: 'fail',
+        message: `Prediction failed: ${error.message}`,
+      }).code(500);
+    }
+  }
 
 const getHistoryHandler = async (request, h) => {
     const userId = request.auth.credentials.userId;  
@@ -147,4 +167,10 @@ const getHistoryHandler = async (request, h) => {
     }).code(200);
   };  
 
-module.exports = { postRegistHandler, postLoginHandler, postPredictHandler, getHistoryHandler };
+  module.exports = { 
+    predictWithFlask,  
+    postRegistHandler, 
+    postLoginHandler, 
+    postPredictHandler, 
+    getHistoryHandler 
+  };
