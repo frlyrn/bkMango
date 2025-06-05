@@ -3,7 +3,6 @@ const jwt = require('jsonwebtoken');
 
 const predictClassification = require('../services/inferenceService');
 const { createUser, getUserByEmail, storeData, getHistoryByUserId } = require('../services/storeData');
-const { generateToken } = require('../services/jwt')
 
 async function postRegistHandler(request, h) {
     const { name, email, password } = request.payload;
