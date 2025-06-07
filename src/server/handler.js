@@ -1,8 +1,9 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-
-const predictClassification = require('../services/inferenceService');
-const { createUser, getUserByEmail, storeData, getHistoryByUserId } = require('../services/storeData');
+const axios = require('axios');
+const FormData = require('form-data');
+const { createUser, getUserByEmail, storeData } = require('../services/storeData');
+const { uploadImageToGCS } = require('../services/utils');
 
 async function postRegistHandler(request, h) {
     const { name, email, password } = request.payload;
@@ -19,7 +20,7 @@ async function postRegistHandler(request, h) {
         return h.response({
             status: 'fail',
             message: 'Email sudah digunakan.',
-        }).code(409); 
+        }).code(409);
     }
 
     const salt = crypto.randomBytes(16).toString('hex');
@@ -78,8 +79,8 @@ async function postLoginHandler(request, h) {
     }
 
     const token = jwt.sign(
-        { userId: user.id, email }, 
-        process.env.JWT_SECRET, 
+        { userId: user.id, email },
+        process.env.JWT_SECRET,
         { expiresIn: '1h' }
     );
 
@@ -93,70 +94,111 @@ async function postLoginHandler(request, h) {
     return response;
 }
 
-async function postPredictHandler(request, h) {
-  const { image } = request.payload;
-  const { model } = request.server.app;
+async function predictClassification(model, image) {
+    const form = new FormData();
+    form.append('file', Buffer.from(image._data), {
+        filename: image.hapi.filename,
+        contentType: image.hapi.headers['content-type'],
+    });
 
-  if (!image) {
-      return h.response({
-          status: 'fail',
-          message: 'Image is required.',
-      }).code(400);
-  }
+    try {
+        const response = await axios.post(
+            'http://34.50.85.113:5000/predict',
+            form,
+            {
+                headers: form.getHeaders()
+            }
+        );
 
-  const userId = request.auth.credentials?.userId;
-  if (!userId) {
-      return h.response({
-          status: 'fail',
-          message: 'Unauthorized. User ID is missing.',
-      }).code(401);
-  }
+        const result = response.data;
+        console.log('Flask prediction result:', result); // debug
 
-  const { label, suggestion } = await predictClassification(model, image);
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
+        if (!result || !result.result || !result.suggestion) {
+            throw new Error('Invalid response from prediction service');
+        }
 
-  const data = {
-      id,
-      result: label,
-      suggestion,
-      createdAt
-  };
+        return {
+            label: result.result,
+            suggestion: result.suggestion,
+            maturity_score: result.maturity_score,
+            estimated_harvest_days: result.estimated_harvest_days
+        };
 
-  await storeData(userId, data);
-
-  const response = h.response({
-      status: 'success',
-      message: 'Model is predicted successfully',
-      data
-  });
-
-  response.code(201);
-  return response;
+    } catch (error) {
+        console.error('Prediction failed:', error.message);
+        throw new Error('Prediction service error');
+    }
 }
 
-const getHistoryHandler = async (request, h) => {
-    const userId = request.auth.credentials.userId;  
-  
-    const history = await getHistoryByUserId(userId);
-  
-    if (!history || history.length === 0) {
-      return h.response({
-        status: 'fail',
-        message: 'No history found for this user.',
-      }).code(404);
-    }
-  
-    return h.response({
-      status: 'success',
-      message: 'History retrieved successfully.',
-      data: history,
-    }).code(200);
-  };  
+async function postPredictHandler(request, h) {
+    const { image } = request.payload;
 
-  module.exports = { 
-    postRegistHandler, 
-    postLoginHandler, 
-    postPredictHandler, 
-    getHistoryHandler 
-  };
+    if (!image) {
+        return h.response({
+            status: 'fail',
+            message: 'Image is required.',
+        }).code(400);
+    }
+
+    const userId = request.auth.credentials?.userId;
+    if (!userId) {
+        return h.response({
+            status: 'fail',
+            message: 'Unauthorized. User ID is missing.',
+        }).code(401);
+    }
+
+    let imageUrl;
+    try {
+        imageUrl = await uploadImageToGCS(image);
+    } catch (uploadError) {
+        console.error('Image upload failed:', uploadError);
+        return h.response({
+            status: 'error',
+            message: 'Image upload failed.',
+        }).code(500);
+    }
+
+    let label, suggestion, maturity_score, estimated_harvest_days;
+    try {
+        ({ label, suggestion, maturity_score, estimated_harvest_days } = await predictClassification(null, image));
+    } catch (err) {
+        return h.response({
+            status: 'error',
+            message: 'Failed to connect to prediction service.',
+        }).code(500);
+    }
+
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+
+    const data = {
+        id,
+        imageUrl, // ← added image URL here
+        maturity_score,
+        result: label,
+        suggestion,
+        estimated_harvest_days,
+        createdAt
+    };
+
+    console.log('Storing data to Firestore:', data);
+
+    await storeData(userId, data);
+
+    const response = h.response({
+        status: 'success',
+        message: 'Model is predicted successfully',
+        data
+    });
+
+    response.code(201);
+    return response;
+}
+
+module.exports = {
+    postRegistHandler,
+    postLoginHandler,
+    predictClassification,
+    postPredictHandler,
+};
