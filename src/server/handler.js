@@ -123,7 +123,6 @@ async function predictClassification(model, image) {
             label: result.result,
             suggestion: result.suggestion,
             maturity_score: result.maturity_score,
-            estimated_harvest_days: result.estimated_harvest_days
         };
 
     } catch (error) {
@@ -161,9 +160,9 @@ async function postPredictHandler(request, h) {
         }).code(500);
     }
 
-    let label, suggestion, maturity_score, estimated_harvest_days;
+    let label, suggestion, maturity_score;
     try {
-        ({ label, suggestion, maturity_score, estimated_harvest_days } = await predictClassification(null, image));
+        ({ label, suggestion, maturity_score } = await predictClassification(null, image));
     } catch (err) {
         return h.response({
             status: 'error',
@@ -180,7 +179,6 @@ async function postPredictHandler(request, h) {
         maturity_score,
         result: label,
         suggestion,
-        estimated_harvest_days,
         createdAt
     };
 
