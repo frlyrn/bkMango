@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const FormData = require('form-data');
+const { Firestore } = require('@google-cloud/firestore');
+const db = new Firestore();
 const { createUser, getUserByEmail, storeData } = require('../services/storeData');
 const { uploadImageToGCS } = require('../services/utils');
 
@@ -19,7 +21,7 @@ async function postRegistHandler(request, h) {
     if (existingUser) {
         return h.response({
             status: 'fail',
-            message: 'Email sudah digunakan.',
+            message: 'Email sudah digunakan, silahkan gunakan email lain',
         }).code(409);
     }
 
@@ -151,8 +153,8 @@ async function postPredictHandler(request, h) {
     let imageUrl;
     try {
         imageUrl = await uploadImageToGCS(image);
-    } catch (uploadError) {
-        console.error('Image upload failed:', uploadError);
+    } catch (err) {
+        console.error('Upload error:', err);
         return h.response({
             status: 'error',
             message: 'Image upload failed.',
@@ -196,9 +198,46 @@ async function postPredictHandler(request, h) {
     return response;
 }
 
+async function getHistoryHandler(request, h) {
+  const userId = request.auth.credentials?.userId;
+
+  if (!userId) {
+    return h.response({
+      status: 'fail',
+      message: 'Unauthorized. User ID is missing.',
+    }).code(401);
+  }
+
+  try {
+    const historyRef = db.collection('predictions').doc(userId).collection('history');
+    const snapshot = await historyRef.orderBy('timestamp', 'desc').get();
+
+    const history = [];
+    snapshot.forEach(doc => {
+      history.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return h.response({
+      status: 'success',
+      data: history
+    }).code(200);
+
+  } catch (err) {
+    console.error('Failed to fetch history:', err);
+    return h.response({
+      status: 'error',
+      message: 'Failed to fetch history data.'
+    }).code(500);
+  }
+}
+
 module.exports = {
     postRegistHandler,
     postLoginHandler,
     predictClassification,
     postPredictHandler,
+    getHistoryHandler,
 };

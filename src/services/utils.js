@@ -2,11 +2,17 @@ const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 
 const storage = new Storage({
-  keyFilename: path.join(__dirname, ''),
-  projectId: 'testskri' // dari file JSON atau Cloud Console
+  keyFilename: path.join(__dirname, '../../service-account.json'),
+  projectId: 'testskri' 
 });
 
 const bucket = storage.bucket('mango-detection-images');
+
+/**
+ * Upload image ke GCS dan kembalikan URL publik
+ * @param {Object} image - objek file dari request (Hapi multipart)
+ * @returns {Promise<string>} - URL publik dari file
+ */
 
 const uploadImageToGCS = async (image) => {
   const fileName = `${Date.now()}_${image.hapi.filename}`;
@@ -17,13 +23,12 @@ const uploadImageToGCS = async (image) => {
       metadata: {
         contentType: image.hapi.headers['content-type']
       },
-      resumable: false
+      resumable: false,
     });
 
     stream.on('error', (err) => reject(err));
 
-    stream.on('finish', async () => {
-      await file.makePublic(); // agar bisa diakses via URL
+    stream.on('finish', () => {
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${file.name}`;
       resolve(publicUrl);
     });

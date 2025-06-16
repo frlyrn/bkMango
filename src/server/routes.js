@@ -1,5 +1,5 @@
-const { postRegistHandler, postLoginHandler, postPredictHandler } = require('../server/handler');
-const { authenticate } = require ('../services/middleware')
+const { postRegistHandler, postLoginHandler, postPredictHandler, getHistoryHandler } = require('../server/handler');
+const { authenticate } = require('../services/middleware')
 
 const routes = [
     {
@@ -25,6 +25,14 @@ const routes = [
                 maxBytes: 1000000,
                 parse: true,
             }
+        }
+    },
+    {
+        path: '/history',
+        method: 'GET',
+        handler: getHistoryHandler,
+        options: {
+            pre: [{ method: authenticate }],
         }
     },
 ]
