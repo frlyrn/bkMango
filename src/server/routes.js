@@ -21,7 +21,7 @@ const routes = [
             payload: {
                 allow: 'multipart/form-data',
                 multipart: true,
-                output: 'stream',
+                output: 'file',
                 maxBytes: 1000000,
                 parse: true,
             }

@@ -4,15 +4,15 @@ const Hapi = require('@hapi/hapi');
 const routes = require('../server/routes');
 const inputError = require('../exceptions/inputError');
 
-(async () => {
+const init = async () => {
     const server = Hapi.server({
-        port: process.env.PORT || 3000,
-        host: '0.0.0.0',
+        port: process.env.PORT || 8080, 
+        host: '0.0.0.0', 
         routes: {
             cors: {
                 origin: ['*'],
-                headers: ['Accept', 'Content-Type', 'Authorization'], 
-                exposedHeaders: ['Authorization'], 
+                headers: ['Accept', 'Content-Type', 'Authorization'],
+                exposedHeaders: ['Authorization'],
                 credentials: true,
             },
             payload: {
@@ -23,39 +23,40 @@ const inputError = require('../exceptions/inputError');
 
     server.route(routes);
 
-    server.ext('onPreResponse', function (request, h) {
+    server.ext('onPreResponse', (request, h) => {
         const response = request.response;
 
         if (response instanceof inputError) {
-            const newResponse = h.response({
+            return h.response({
                 status: 'fail',
                 message: `${response.message} Please use another photo.`
-            });
-            newResponse.code(response.statusCode);
-            return newResponse;
+            }).code(response.statusCode);
         }
 
         if (response.isBoom) {
             if (response.output.statusCode === 413) {
-                const newResponse = h.response({
+                return h.response({
                     status: 'fail',
                     message: 'Payload content length greater than maximum allowed: 1000000',
-                });
-                newResponse.code(413);
-                return newResponse;
+                }).code(413);
             }
 
-            const newResponse = h.response({
+            return h.response({
                 status: 'fail',
                 message: response.message,
-            });
-            newResponse.code(response.output.statusCode);
-            return newResponse;
+            }).code(response.output.statusCode);
         }
 
         return h.continue;
     });
 
     await server.start();
-    console.log(`Server start at: ${server.info.uri}`);
-})();
+    console.log(`✅ Server running at ${server.info.uri}`);
+};
+
+process.on('unhandledRejection', (err) => {
+    console.error('💥 Unhandled Rejection:', err);
+    process.exit(1);
+});
+
+init();

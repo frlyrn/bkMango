@@ -98,14 +98,14 @@ async function postLoginHandler(request, h) {
 
 async function predictClassification(model, image) {
     const form = new FormData();
-    form.append('file', Buffer.from(image._data), {
+    form.append('image', Buffer.from(image._data), {
         filename: image.hapi.filename,
         contentType: image.hapi.headers['content-type'],
     });
 
     try {
         const response = await axios.post(
-            'http://34.50.85.113:5000/predict',
+            'https://mangodetect-947755240619.asia-southeast2.run.app/predict',
             form,
             {
                 headers: form.getHeaders()
@@ -134,7 +134,7 @@ async function predictClassification(model, image) {
 async function postPredictHandler(request, h) {
     const { image } = request.payload;
 
-    if (!image) {
+    if (!image || !image.path) {
         return h.response({
             status: 'fail',
             message: 'Image is required.',
@@ -197,39 +197,39 @@ async function postPredictHandler(request, h) {
 }
 
 async function getHistoryHandler(request, h) {
-  const userId = request.auth.credentials?.userId;
+    const userId = request.auth.credentials?.userId;
 
-  if (!userId) {
-    return h.response({
-      status: 'fail',
-      message: 'Unauthorized. User ID is missing.',
-    }).code(401);
-  }
+    if (!userId) {
+        return h.response({
+            status: 'fail',
+            message: 'Unauthorized. User ID is missing.',
+        }).code(401);
+    }
 
-  try {
-    const historyRef = db.collection('predictions').doc(userId).collection('history');
-    const snapshot = await historyRef.orderBy('timestamp', 'desc').get();
+    try {
+        const historyRef = db.collection('predictions').doc(userId).collection('history');
+        const snapshot = await historyRef.orderBy('timestamp', 'desc').get();
 
-    const history = [];
-    snapshot.forEach(doc => {
-      history.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
+        const history = [];
+        snapshot.forEach(doc => {
+            history.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
 
-    return h.response({
-      status: 'success',
-      data: history
-    }).code(200);
+        return h.response({
+            status: 'success',
+            data: history
+        }).code(200);
 
-  } catch (err) {
-    console.error('Failed to fetch history:', err);
-    return h.response({
-      status: 'error',
-      message: 'Failed to fetch history data.'
-    }).code(500);
-  }
+    } catch (err) {
+        console.error('Failed to fetch history:', err);
+        return h.response({
+            status: 'error',
+            message: 'Failed to fetch history data.'
+        }).code(500);
+    }
 }
 
 module.exports = {
